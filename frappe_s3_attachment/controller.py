@@ -7,15 +7,16 @@ import re
 import string
 
 import boto3
+import urllib.parse
+import unicodedata
 
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
 import frappe
 
-
 import magic
-#hello
+
 
 class S3Operations(object):
 
@@ -48,6 +49,13 @@ class S3Operations(object):
         self.BUCKET = self.s3_settings_doc.bucket_name
         self.folder_name = self.s3_settings_doc.folder_name
 
+    def _content_disposition(self, file_name: str) -> str:
+        """Return RFC 5987 compliant Content-Disposition for original filename."""
+        ascii_name = unicodedata.normalize("NFKD", file_name).encode("ascii", "ignore").decode("ascii") or "download"
+        ascii_name = ascii_name.replace('"', "")
+        utf8 = urllib.parse.quote(file_name, safe="")
+        return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{utf8}'
+
     def strip_special_chars(self, file_name):
         """
         Strips file charachters which doesnt match the regex.
@@ -63,7 +71,7 @@ class S3Operations(object):
         hook_cmd = frappe.get_hooks().get("s3_key_generator")
         if hook_cmd:
             try:
-                k = frappe.get_attr(hook_cmd[0])(
+                k = frappe.get_attr(hook_cmd[0])(  # type: ignore
                     file_name=file_name,
                     parent_doctype=parent_doctype,
                     parent_name=parent_name
@@ -110,15 +118,16 @@ class S3Operations(object):
         mime_type = magic.from_file(file_path, mime=True)
         key = self.key_generator(file_name, parent_doctype, parent_name)
         content_type = mime_type
+        cd = self._content_disposition(file_name)
         try:
             if is_private:
                 self.S3_CLIENT.upload_file(
                     file_path, self.BUCKET, key,
                     ExtraArgs={
                         "ContentType": content_type,
+                        "ContentDisposition": cd,
                         "Metadata": {
-                            "ContentType": content_type,
-                            "file_name": file_name
+                            "ContentType": content_type
                         }
                     }
                 )
@@ -127,10 +136,10 @@ class S3Operations(object):
                     file_path, self.BUCKET, key,
                     ExtraArgs={
                         "ContentType": content_type,
+                        "ContentDisposition": cd,
                         "ACL": 'public-read',
                         "Metadata": {
-                            "ContentType": content_type,
-
+                            "ContentType": content_type
                         }
                     }
                 )
@@ -164,16 +173,15 @@ class S3Operations(object):
         :param key: s3 object key
         """
         if self.s3_settings_doc.signed_url_expiry_time:
-            self.signed_url_expiry_time = self.s3_settings_doc.signed_url_expiry_time # noqa
+            self.signed_url_expiry_time = self.s3_settings_doc.signed_url_expiry_time  # noqa
         else:
             self.signed_url_expiry_time = 120
         params = {
-                'Bucket': self.BUCKET,
-                'Key': key,
-
+            'Bucket': self.BUCKET,
+            'Key': key,
         }
         if file_name:
-            params['ResponseContentDisposition'] = 'filename={}'.format(file_name)
+            params['ResponseContentDisposition'] = self._content_disposition(file_name)
 
         url = self.S3_CLIENT.generate_presigned_url(
             'get_object',
