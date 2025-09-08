@@ -208,15 +208,18 @@ def file_upload_to_s3(doc, method):
             file_path = site_path + '/public' + path
         else:
             file_path = site_path + path
+        # 元のアップロード名を優先（なければ従来の doc.file_name）
+        original_name = getattr(doc, "original_file_name", None) or doc.file_name
+
         key = s3_upload.upload_files_to_s3_with_key(
-            file_path, doc.file_name,
+            file_path, original_name,
             doc.is_private, parent_doctype,
             parent_name
         )
 
         if doc.is_private:
             method = "frappe_s3_attachment.controller.generate_file"
-            file_url = """/api/method/{0}?key={1}&file_name={2}""".format(method, key, doc.file_name)
+            file_url = f"/api/method/{method}?key={key}&file_name={original_name}"
         else:
             file_url = '{}/{}/{}'.format(
                 s3_upload.S3_CLIENT.meta.endpoint_url,
@@ -280,7 +283,7 @@ def upload_existing_files_s3(name):
 
         if doc.is_private:
             method = "frappe_s3_attachment.controller.generate_file"
-            file_url = """/api/method/{0}?key={1}""".format(method, key)
+            file_url = f"/api/method/{method}?key={key}&file_name={doc.file_name}"
         else:
             file_url = '{}/{}/{}'.format(
                 s3_upload.S3_CLIENT.meta.endpoint_url,
