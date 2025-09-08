@@ -8,7 +8,7 @@ app_publisher = "Frappe"
 app_description = "Frappe app to make file upload to S3 through attach file option."
 app_icon = "octicon octicon-file-directory"
 app_color = "grey"
-app_email = "ramesh.ravi@zerodha.com"
+app_email = "g-shibayama@mitsuwagroup.co.jp"
 app_license = "MIT"
 
 # Includes in <head>
